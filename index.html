@@ -913,6 +913,14 @@
         
         window.addEventListener('keydown', (e) => {
             keys[e.key.toLowerCase()] = true;
+
+            // Check if waiting for continue after ability selection
+            if (abilitySelection.waitingForContinue && (e.key === ' ' || e.key === 'Enter')) {
+                e.preventDefault();
+                continueFromAbilitySelection();
+                return;
+            }
+
             if (e.key === ' ') {
                 e.preventDefault();
                 checkRobbery();
@@ -1399,70 +1407,157 @@
         function startAbilitySelection() {
             gameState.isPaused = true;
             gameState.abilitySelectionActive = true;
-            
-            // Generate 3 abilities ensuring variety (always show different rarities)
+
+            // Generate 3 abilities with proper probabilities
             abilitySelection.abilities = generateAbilitySet();
             abilitySelection.startTime = Date.now();
             abilitySelection.selectedIndex = -1;
-            
+            abilitySelection.waitingForContinue = false;
+
             // After 1 second pause, start roulette for 3 seconds
             setTimeout(() => {
                 // Roulette selection after 3 seconds
                 setTimeout(() => {
                     abilitySelection.selectedIndex = Math.floor(Math.random() * 3);
                     applyAbility(abilitySelection.abilities[abilitySelection.selectedIndex]);
-                    
-                    // Close selection after showing result for 1 second
-                    setTimeout(() => {
-                        gameState.isPaused = false;
-                        gameState.abilitySelectionActive = false;
-                        abilitySelection.active = false;
-                    }, 1000);
+                    abilitySelection.waitingForContinue = true;
+
+                    // Now wait for user to press Continue (SPACE or ENTER)
                 }, 3000);
             }, 1000);
         }
+
+        // Handle continue button press
+        function continueFromAbilitySelection() {
+            if (abilitySelection.waitingForContinue) {
+                gameState.isPaused = false;
+                gameState.abilitySelectionActive = false;
+                abilitySelection.active = false;
+                abilitySelection.waitingForContinue = false;
+            }
+        }
         
+        // Abilities database with clear names and descriptions
+        const ABILITIES = {
+            BASIC: [
+                {
+                    id: 'speed_boost',
+                    name: 'SPEED BOOST',
+                    description: 'Increases your movement speed by 2%',
+                    rarity: 'BASIC',
+                    type: 'speed',
+                    icon: '⚡'
+                },
+                {
+                    id: 'rapid_fire',
+                    name: 'RAPID FIRE',
+                    description: 'Shoot 2% faster',
+                    rarity: 'BASIC',
+                    type: 'fireRate',
+                    icon: '🔫'
+                }
+            ],
+            EPIC: [
+                {
+                    id: 'multi_shot',
+                    name: 'MULTI-SHOT',
+                    description: 'Shoot +2 additional bullets per shot',
+                    rarity: 'EPIC',
+                    type: 'multiShot',
+                    icon: '💥'
+                },
+                {
+                    id: 'bomb_ability',
+                    name: 'BOMB MASTER',
+                    description: 'Unlock bomb ability (Press B to place)',
+                    rarity: 'EPIC',
+                    type: 'bomb',
+                    icon: '💣'
+                }
+            ],
+            LEGENDARY: [
+                {
+                    id: 'extra_life',
+                    name: 'EXTRA LIFE',
+                    description: 'Gain +1 additional life',
+                    rarity: 'LEGENDARY',
+                    type: 'extraLife',
+                    icon: '❤️'
+                },
+                {
+                    id: 'ghost_mode',
+                    name: 'GHOST MODE',
+                    description: 'Become invisible for 3 seconds',
+                    rarity: 'LEGENDARY',
+                    type: 'invisibility',
+                    icon: '👻'
+                },
+                {
+                    id: 'epic_multiplier',
+                    name: 'EPIC BOOST',
+                    description: 'Triple all your epic upgrades',
+                    rarity: 'LEGENDARY',
+                    type: 'tripleEpic',
+                    icon: '⭐'
+                }
+            ]
+        };
+
         function generateAbilitySet() {
-            // ALWAYS generate exactly 1 Basic, 1 Epic, and 1 Legendary ability
             const abilities = [];
+            const usedIds = new Set();
 
-            // Generate one of each rarity
-            abilities.push(getRandomBasic());
-            abilities.push(getRandomEpic());
-            abilities.push(getRandomLegendary());
+            // Generate 3 abilities with proper probabilities
+            // 70% Basic, 25% Epic, 5% Legendary for each slot
+            for (let i = 0; i < 3; i++) {
+                let ability = null;
+                let attempts = 0;
+                const maxAttempts = 50;
 
-            // Shuffle the array to randomize positions
-            for (let i = abilities.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [abilities[i], abilities[j]] = [abilities[j], abilities[i]];
+                while (!ability && attempts < maxAttempts) {
+                    const rand = Math.random();
+                    let rarity;
+
+                    if (rand < 0.70) {
+                        rarity = 'BASIC';
+                    } else if (rand < 0.95) {
+                        rarity = 'EPIC';
+                    } else {
+                        rarity = 'LEGENDARY';
+                    }
+
+                    // Get random ability from that rarity
+                    const pool = ABILITIES[rarity];
+                    const candidate = pool[Math.floor(Math.random() * pool.length)];
+
+                    // Check if not already used
+                    if (!usedIds.has(candidate.id)) {
+                        ability = candidate;
+                        usedIds.add(candidate.id);
+                    }
+
+                    attempts++;
+                }
+
+                // Fallback if we couldn't find unique ability
+                if (!ability) {
+                    // Just pick any that wasn't used
+                    const allAbilities = [...ABILITIES.BASIC, ...ABILITIES.EPIC, ...ABILITIES.LEGENDARY];
+                    for (let ab of allAbilities) {
+                        if (!usedIds.has(ab.id)) {
+                            ability = ab;
+                            usedIds.add(ab.id);
+                            break;
+                        }
+                    }
+                }
+
+                if (ability) {
+                    abilities.push(ability);
+                }
             }
 
             return abilities;
-        }
-        
-        function getRandomBasic() {
-            const basics = [
-                { name: 'SPEED +2%', rarity: 'BASIC', type: 'speed' },
-                { name: 'FIRE RATE +2%', rarity: 'BASIC', type: 'fireRate' }
-            ];
-            return basics[Math.floor(Math.random() * basics.length)];
-        }
-        
-        function getRandomEpic() {
-            const epics = [
-                { name: 'MULTI-SHOT +2', rarity: 'EPIC', type: 'multiShot' },
-                { name: 'BOMB ABILITY', rarity: 'EPIC', type: 'bomb' }
-            ];
-            return epics[Math.floor(Math.random() * epics.length)];
-        }
-        
-        function getRandomLegendary() {
-            const legendaries = [
-                { name: 'EXTRA LIFE', rarity: 'LEGENDARY', type: 'extraLife' },
-                { name: 'INVISIBILITY', rarity: 'LEGENDARY', type: 'invisibility' },
-                { name: 'TRIPLE EPIC', rarity: 'LEGENDARY', type: 'tripleEpic' }
-            ];
-            return legendaries[Math.floor(Math.random() * legendaries.length)];
         }
         
         function applyAbility(ability) {
@@ -1894,79 +1989,161 @@
         function drawAbilitySelection() {
             const now = Date.now();
             const elapsed = now - abilitySelection.startTime;
-            
+
             // Semi-transparent overlay
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 24px Orbitron';
+
             ctx.textAlign = 'center';
-            
+
             if (elapsed < 1000) {
+                // Initial "POWER-UP!" message
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 32px Orbitron';
                 ctx.fillText('POWER-UP!', canvas.width/2, canvas.height/2 - 80);
             } else if (elapsed < 4000) {
-                ctx.fillText('CHOOSE YOUR ABILITY...', canvas.width/2, canvas.height/2 - 100);
-                
+                // Roulette phase
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 24px Orbitron';
+                ctx.fillText('SELECTING YOUR ABILITY...', canvas.width/2, canvas.height/2 - 150);
+
                 // Draw 3 abilities with roulette effect
-                const boxWidth = 180;
-                const boxHeight = 120;
-                const spacing = 20;
+                const boxWidth = 200;
+                const boxHeight = 160;
+                const spacing = 30;
                 const startX = canvas.width/2 - (boxWidth * 3 + spacing * 2) / 2;
-                const y = canvas.height/2 - 40;
-                
+                const y = canvas.height/2 - 60;
+
                 for (let i = 0; i < 3; i++) {
                     const ability = abilitySelection.abilities[i];
                     const x = startX + i * (boxWidth + spacing);
-                    
+
                     // Roulette flashing effect
                     const flashSpeed = 0.005;
                     const highlight = Math.sin((elapsed - 1000) * flashSpeed + i * 2) > 0.5;
-                    
+
                     // Draw box
                     const rarityColor = {
                         'BASIC': '#06B6D4',
                         'EPIC': '#A855F7',
                         'LEGENDARY': '#FFD700'
                     };
-                    
-                    ctx.fillStyle = highlight ? rarityColor[ability.rarity] : 'rgba(255, 255, 255, 0.2)';
+
+                    ctx.fillStyle = highlight ? rarityColor[ability.rarity] : 'rgba(255, 255, 255, 0.1)';
                     ctx.fillRect(x, y, boxWidth, boxHeight);
-                    
+
                     ctx.strokeStyle = rarityColor[ability.rarity];
-                    ctx.lineWidth = 3;
+                    ctx.lineWidth = highlight ? 4 : 2;
                     ctx.strokeRect(x, y, boxWidth, boxHeight);
-                    
-                    // Draw text
+
+                    // Draw icon
+                    ctx.font = '40px Arial';
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillText(ability.icon, x + boxWidth/2, y + 50);
+
+                    // Draw rarity
+                    ctx.fillStyle = rarityColor[ability.rarity];
+                    ctx.font = 'bold 14px Orbitron';
+                    ctx.fillText(ability.rarity, x + boxWidth/2, y + 80);
+
+                    // Draw name
                     ctx.fillStyle = '#FFFFFF';
                     ctx.font = 'bold 12px Orbitron';
-                    ctx.fillText(ability.rarity, x + boxWidth/2, y + 30);
-                    
-                    ctx.font = 'bold 14px Orbitron';
-                    const lines = ability.name.split(' ');
-                    lines.forEach((line, idx) => {
-                        ctx.fillText(line, x + boxWidth/2, y + 55 + idx * 18);
+                    const nameLines = ability.name.split(' ');
+                    nameLines.forEach((line, idx) => {
+                        ctx.fillText(line, x + boxWidth/2, y + 100 + idx * 16);
+                    });
+
+                    // Draw description (small)
+                    ctx.font = '10px Orbitron';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    const descLines = wrapText(ctx, ability.description, boxWidth - 20);
+                    descLines.forEach((line, idx) => {
+                        ctx.fillText(line, x + boxWidth/2, y + 130 + idx * 12);
                     });
                 }
             } else if (abilitySelection.selectedIndex >= 0) {
+                // Selection made - show detailed info
                 const ability = abilitySelection.abilities[abilitySelection.selectedIndex];
                 const rarityColor = {
                     'BASIC': '#06B6D4',
                     'EPIC': '#A855F7',
                     'LEGENDARY': '#FFD700'
                 };
-                
-                ctx.fillStyle = rarityColor[ability.rarity];
-                ctx.font = 'bold 32px Orbitron';
-                ctx.fillText('SELECTED!', canvas.width/2, canvas.height/2 - 60);
-                
-                ctx.font = 'bold 24px Orbitron';
-                ctx.fillText(ability.name, canvas.width/2, canvas.height/2);
-                
-                ctx.font = 'bold 18px Orbitron';
+
+                // Selected box
+                const boxWidth = 400;
+                const boxHeight = 300;
+                const x = canvas.width/2 - boxWidth/2;
+                const y = canvas.height/2 - boxHeight/2 - 50;
+
+                ctx.fillStyle = 'rgba(26, 11, 46, 0.95)';
+                ctx.fillRect(x, y, boxWidth, boxHeight);
+
+                ctx.strokeStyle = rarityColor[ability.rarity];
+                ctx.lineWidth = 5;
+                ctx.strokeRect(x, y, boxWidth, boxHeight);
+
+                // Icon
+                ctx.font = '60px Arial';
                 ctx.fillStyle = '#FFFFFF';
-                ctx.fillText(ability.rarity, canvas.width/2, canvas.height/2 + 40);
+                ctx.fillText(ability.icon, canvas.width/2, y + 80);
+
+                // Rarity
+                ctx.fillStyle = rarityColor[ability.rarity];
+                ctx.font = 'bold 20px Orbitron';
+                ctx.fillText(ability.rarity, canvas.width/2, y + 120);
+
+                // Name
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 28px Orbitron';
+                ctx.fillText(ability.name, canvas.width/2, y + 160);
+
+                // Description
+                ctx.font = '16px Orbitron';
+                ctx.fillStyle = '#06B6D4';
+                const descLines = wrapText(ctx, ability.description, boxWidth - 40);
+                descLines.forEach((line, idx) => {
+                    ctx.fillText(line, canvas.width/2, y + 200 + idx * 22);
+                });
+
+                // Continue button (if waiting)
+                if (abilitySelection.waitingForContinue) {
+                    const btnY = y + boxHeight + 40;
+                    const pulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
+
+                    ctx.fillStyle = rarityColor[ability.rarity];
+                    ctx.globalAlpha = pulse;
+                    ctx.font = 'bold 20px Orbitron';
+                    ctx.fillText('PRESS SPACE OR ENTER TO CONTINUE', canvas.width/2, btnY);
+                    ctx.globalAlpha = 1;
+                }
             }
+        }
+
+        // Helper function to wrap text
+        function wrapText(ctx, text, maxWidth) {
+            const words = text.split(' ');
+            const lines = [];
+            let currentLine = '';
+
+            for (let word of words) {
+                const testLine = currentLine + (currentLine ? ' ' : '') + word;
+                const metrics = ctx.measureText(testLine);
+
+                if (metrics.width > maxWidth && currentLine !== '') {
+                    lines.push(currentLine);
+                    currentLine = word;
+                } else {
+                    currentLine = testLine;
+                }
+            }
+
+            if (currentLine) {
+                lines.push(currentLine);
+            }
+
+            return lines;
         }
         
         function gameLoop() {
