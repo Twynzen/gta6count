@@ -1,0 +1,11 @@
+name = "gta6-leaderboard-worker"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# KV Namespace for leaderboard storage
+[[kv_namespaces]]
+binding = "LEADERBOARD_KV"
+id = "YOUR_KV_NAMESPACE_ID_HERE"
+
+# Routes - Update this to match your domain
+# Example: routes = [{ pattern = "cuentaregresivagta6.com/api/*", zone_name = "cuentaregresivagta6.com" }]

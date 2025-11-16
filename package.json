@@ -1,0 +1,26 @@
+{
+  "name": "gta6-countdown",
+  "version": "2.0.0",
+  "description": "GTA 6 Countdown with Miami Street Escape game and global leaderboard",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:worker": "wrangler deploy",
+    "tail": "wrangler tail",
+    "kv:create": "wrangler kv:namespace create gta6-leaderboard",
+    "kv:list": "wrangler kv:namespace list",
+    "test:api": "node test-api.js"
+  },
+  "keywords": [
+    "gta6",
+    "countdown",
+    "game",
+    "cloudflare",
+    "workers"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

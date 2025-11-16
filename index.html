@@ -759,10 +759,16 @@
         });
         
         // ==================== GAME CODE ====================
-        
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        
+
+        // API Configuration
+        const API_CONFIG = {
+            enabled: true, // Set to true when Worker is deployed
+            baseUrl: window.location.origin, // Uses same domain as the site
+        };
+
         // Player name
         let playerName = '';
         
@@ -847,22 +853,58 @@
         ];
         
         // Leaderboard functions
-        function getLeaderboard() {
+        async function getLeaderboard() {
+            if (API_CONFIG.enabled) {
+                try {
+                    const response = await fetch(`${API_CONFIG.baseUrl}/api/leaderboard`);
+                    if (response.ok) {
+                        return await response.json();
+                    }
+                } catch (error) {
+                    console.error('Error fetching leaderboard from API:', error);
+                }
+                // Fallback to localStorage if API fails
+            }
+
+            // localStorage fallback
             const stored = localStorage.getItem('gta6Leaderboard');
             return stored ? JSON.parse(stored) : [];
         }
-        
-        function saveToLeaderboard(name, score) {
-            let leaderboard = getLeaderboard();
+
+        async function saveToLeaderboard(name, score) {
+            if (API_CONFIG.enabled) {
+                try {
+                    const response = await fetch(`${API_CONFIG.baseUrl}/api/score`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ name, score }),
+                    });
+
+                    if (response.ok) {
+                        const leaderboard = await response.json();
+                        // Also save to localStorage for offline access
+                        localStorage.setItem('gta6Leaderboard', JSON.stringify(leaderboard));
+                        return leaderboard;
+                    }
+                } catch (error) {
+                    console.error('Error saving score to API:', error);
+                }
+                // Fallback to localStorage if API fails
+            }
+
+            // localStorage fallback
+            let leaderboard = await getLeaderboard();
             leaderboard.push({ name: name, score: score, date: new Date().toISOString() });
             leaderboard.sort((a, b) => b.score - a.score);
             leaderboard = leaderboard.slice(0, 10); // Keep top 10
             localStorage.setItem('gta6Leaderboard', JSON.stringify(leaderboard));
             return leaderboard;
         }
-        
-        function isTopScore(score) {
-            const leaderboard = getLeaderboard();
+
+        async function isTopScore(score) {
+            const leaderboard = await getLeaderboard();
             return leaderboard.length < 10 || score > leaderboard[leaderboard.length - 1].score;
         }
         
@@ -885,17 +927,128 @@
         });
         
         function openGame() {
-            // Ask for player name
-            playerName = prompt('Enter your name for the leaderboard:', localStorage.getItem('lastPlayerName') || 'Player');
-            if (!playerName || playerName.trim() === '') {
-                playerName = 'Anonymous';
+            // Show name input modal
+            showNameInputModal();
+        }
+
+        function showNameInputModal() {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.95);
+                z-index: 3000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            `;
+
+            const container = document.createElement('div');
+            container.style.cssText = `
+                background: linear-gradient(135deg, #1a0b2e 0%, #2d1b4e 100%);
+                padding: 40px;
+                border-radius: 15px;
+                border: 3px solid #FF006E;
+                box-shadow: 0 0 40px rgba(255, 0, 110, 0.6);
+                max-width: 500px;
+                width: 90%;
+            `;
+
+            container.innerHTML = `
+                <h2 style="font-family: 'Bebas Neue', sans-serif; font-size: 2.5em; color: #FF006E; margin-bottom: 20px; text-align: center; letter-spacing: 3px;">ENTER YOUR NAME</h2>
+                <p style="color: #06B6D4; text-align: center; margin-bottom: 30px; font-family: 'Orbitron', sans-serif;">Your name will appear on the leaderboard!</p>
+                <input type="text" id="playerNameInput" maxlength="20" placeholder="Enter your nickname..." style="
+                    width: 100%;
+                    padding: 15px;
+                    font-family: 'Orbitron', sans-serif;
+                    font-size: 1.2em;
+                    background: rgba(255, 255, 255, 0.1);
+                    border: 2px solid #06B6D4;
+                    border-radius: 8px;
+                    color: #FFFFFF;
+                    margin-bottom: 10px;
+                    box-sizing: border-box;
+                " />
+                <p id="nameError" style="color: #FF006E; font-size: 0.9em; margin-bottom: 20px; min-height: 20px; font-family: 'Orbitron', sans-serif;"></p>
+                <button id="startGameBtn" style="
+                    width: 100%;
+                    padding: 15px;
+                    font-family: 'Bebas Neue', sans-serif;
+                    font-size: 2em;
+                    background: linear-gradient(135deg, #FF006E 0%, #EC4899 100%);
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    letter-spacing: 2px;
+                    transition: all 0.3s ease;
+                ">START GAME</button>
+            `;
+
+            modal.appendChild(container);
+            document.body.appendChild(modal);
+
+            const input = document.getElementById('playerNameInput');
+            const errorMsg = document.getElementById('nameError');
+            const startBtn = document.getElementById('startGameBtn');
+
+            // Load last used name
+            const lastPlayerName = localStorage.getItem('lastPlayerName');
+            if (lastPlayerName && lastPlayerName !== 'Anonymous') {
+                input.value = lastPlayerName;
             }
-            playerName = playerName.trim().substring(0, 20); // Max 20 characters
-            localStorage.setItem('lastPlayerName', playerName);
-            
-            document.getElementById('gameModal').classList.add('active');
-            resetGame();
-            gameLoop();
+
+            // Focus input
+            input.focus();
+
+            // Enter key to submit
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    startBtn.click();
+                }
+            });
+
+            // Hover effect
+            startBtn.addEventListener('mouseenter', () => {
+                startBtn.style.background = 'linear-gradient(135deg, #06B6D4 0%, #22D3EE 100%)';
+                startBtn.style.transform = 'scale(1.05)';
+            });
+
+            startBtn.addEventListener('mouseleave', () => {
+                startBtn.style.background = 'linear-gradient(135deg, #FF006E 0%, #EC4899 100%)';
+                startBtn.style.transform = 'scale(1)';
+            });
+
+            startBtn.addEventListener('click', () => {
+                const name = input.value.trim();
+
+                if (name === '') {
+                    errorMsg.textContent = '⚠️ Please enter a name to continue!';
+                    input.style.borderColor = '#FF006E';
+                    return;
+                }
+
+                if (name.length < 2) {
+                    errorMsg.textContent = '⚠️ Name must be at least 2 characters!';
+                    input.style.borderColor = '#FF006E';
+                    return;
+                }
+
+                // Valid name
+                playerName = name.substring(0, 20);
+                localStorage.setItem('lastPlayerName', playerName);
+
+                // Remove modal
+                document.body.removeChild(modal);
+
+                // Start game
+                document.getElementById('gameModal').classList.add('active');
+                resetGame();
+                gameLoop();
+            });
         }
         
         function closeGame() {
@@ -906,10 +1059,15 @@
             }
         }
         
-        function showLeaderboard() {
-            const leaderboard = getLeaderboard();
+        async function showLeaderboard() {
             const leaderboardList = document.getElementById('leaderboardList');
-            
+
+            // Show loading
+            leaderboardList.innerHTML = '<div style="text-align: center; color: #06B6D4; padding: 40px; font-family: Orbitron;">Loading leaderboard...</div>';
+            document.getElementById('leaderboardModal').classList.add('active');
+
+            const leaderboard = await getLeaderboard();
+
             if (leaderboard.length === 0) {
                 leaderboardList.innerHTML = '<div style="text-align: center; color: #A855F7; padding: 40px; font-family: Orbitron;">No scores yet! Be the first to play!</div>';
             } else {
@@ -918,7 +1076,7 @@
                     const rank = index + 1;
                     const rankSymbol = rank === 1 ? '👑 ' : rank + '. ';
                     const entryClass = rank === 1 ? 'first' : '';
-                    
+
                     html += `<div class="leaderboard-entry ${entryClass}">
                         <span class="leaderboard-rank">${rankSymbol}</span>
                         <span class="leaderboard-name">${entry.name}</span>
@@ -927,8 +1085,6 @@
                 });
                 leaderboardList.innerHTML = html;
             }
-            
-            document.getElementById('leaderboardModal').classList.add('active');
         }
         
         function closeLeaderboard() {
@@ -1267,39 +1423,20 @@
         }
         
         function generateAbilitySet() {
-            // Always ensure variety: at least one of each rarity visible
+            // ALWAYS generate exactly 1 Basic, 1 Epic, and 1 Legendary ability
             const abilities = [];
-            
-            // Slot 1: Basic (65%), Epic (25%), Legendary (10%)
-            const rand1 = Math.random();
-            if (rand1 < 0.65) {
-                abilities.push(getRandomBasic());
-            } else if (rand1 < 0.90) {
-                abilities.push(getRandomEpic());
-            } else {
-                abilities.push(getRandomLegendary());
+
+            // Generate one of each rarity
+            abilities.push(getRandomBasic());
+            abilities.push(getRandomEpic());
+            abilities.push(getRandomLegendary());
+
+            // Shuffle the array to randomize positions
+            for (let i = abilities.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [abilities[i], abilities[j]] = [abilities[j], abilities[i]];
             }
-            
-            // Slot 2: Epic (40%), Basic (40%), Legendary (20%)
-            const rand2 = Math.random();
-            if (rand2 < 0.40) {
-                abilities.push(getRandomEpic());
-            } else if (rand2 < 0.80) {
-                abilities.push(getRandomBasic());
-            } else {
-                abilities.push(getRandomLegendary());
-            }
-            
-            // Slot 3: Legendary (30%), Epic (40%), Basic (30%)
-            const rand3 = Math.random();
-            if (rand3 < 0.30) {
-                abilities.push(getRandomLegendary());
-            } else if (rand3 < 0.70) {
-                abilities.push(getRandomEpic());
-            } else {
-                abilities.push(getRandomBasic());
-            }
-            
+
             return abilities;
         }
         
@@ -1531,17 +1668,24 @@
                    rect1.y + rect1.height > rect2.y;
         }
         
-        function showGameOver() {
-            // Save to leaderboard
-            const leaderboard = saveToLeaderboard(playerName, gameState.score);
-            
+        async function showGameOver() {
             // Update game over screen
             document.getElementById('finalScore').textContent = gameState.score;
-            
+
+            // Show loading state
+            let leaderboardHTML = '<div style="margin-top: 20px; text-align: center;">';
+            leaderboardHTML += '<p style="color: #06B6D4; font-family: Orbitron;">Saving score...</p>';
+            leaderboardHTML += '</div>';
+            document.getElementById('leaderboardContent').innerHTML = leaderboardHTML;
+            document.getElementById('gameOverScreen').classList.add('active');
+
+            // Save to leaderboard
+            const leaderboard = await saveToLeaderboard(playerName, gameState.score);
+
             // Show leaderboard
-            let leaderboardHTML = '<div style="margin-top: 20px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto;">';
+            leaderboardHTML = '<div style="margin-top: 20px; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto;">';
             leaderboardHTML += '<h3 style="color: #06B6D4; text-align: center; margin-bottom: 15px; font-size: 1.5em;">TOP 10 LEADERBOARD</h3>';
-            
+
             leaderboard.forEach((entry, index) => {
                 const isCurrentPlayer = entry.name === playerName && entry.score === gameState.score;
                 const color = isCurrentPlayer ? '#FFD700' : '#A855F7';
@@ -1550,11 +1694,10 @@
                 leaderboardHTML += `${prefix}<strong>${entry.name}</strong> - ${entry.score} pts`;
                 leaderboardHTML += `</div>`;
             });
-            
+
             leaderboardHTML += '</div>';
-            
+
             document.getElementById('leaderboardContent').innerHTML = leaderboardHTML;
-            document.getElementById('gameOverScreen').classList.add('active');
         }
         
         function draw() {

@@ -1,0 +1,30 @@
+# Wrangler
+.wrangler/
+wrangler.toml.bak
+
+# Node modules (si usas npm para herramientas)
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+dist/
+build/
+.cache/
